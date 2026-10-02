@@ -1,0 +1,16 @@
+# Keeps the pinned actions current, as in mureev/weather: each action is pinned to a commit with its release
+# in a comment, and Dependabot moves the two together in one weekly pull request, which CI tests like any
+# branch. Merging it stays the owner's act, and on this repository a merge to master is a deploy.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # A week before a release is proposed: a hijacked action release is usually found and pulled within days.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1,0 +1,142 @@
+{
+ "hosts": {
+  "gosuslugi.ru": "77.88.55.242",
+  "online.sberbank.ru": "77.88.55.242",
+  "tbank.ru": "77.88.55.242",
+  "xn--b1aew.xn--p1ai": "77.88.55.242",
+  "vk.com": "87.240.132.78",
+  "sberbank.com": "194.54.14.168",
+  "alfabank.com": "217.12.96.180",
+  "ru-hosted.sr2incy-test.net": "77.88.55.242",
+  "eu-hosted.sr2incy-test.net": "1.1.1.1",
+  "seasonvar.ru": "104.21.32.1",
+  "tvrain.ru": "104.21.32.1"
+ },
+ "cases": [
+  {
+   "dest": "gosuslugi.ru",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "online.sberbank.ru",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "tbank.ru",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "мвд.рф",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "vk.com",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "sberbank.com",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "alfabank.com",
+   "expect": "direct",
+   "why": "resolves to a Russian IP -> GEOIP,RU (as in SR)"
+  },
+  {
+   "dest": "eu.2gis.com",
+   "expect": "direct",
+   "why": "ipchecker list"
+  },
+  {
+   "dest": "checkip.amazonaws.com",
+   "expect": "direct",
+   "why": "ipchecker list"
+  },
+  {
+   "dest": "ru-hosted.sr2incy-test.net",
+   "expect": "direct",
+   "why": "unknown name, Russian IP -> geoip:ru (SR: GEOIP,RU)"
+  },
+  {
+   "dest": "eu-hosted.sr2incy-test.net",
+   "expect": "proxy",
+   "why": "unknown name, foreign IP -> FINAL,PROXY"
+  },
+  {
+   "dest": "habr.com",
+   "expect": "proxy",
+   "why": "custom-proxy.list"
+  },
+  {
+   "dest": "youtube.com",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "rr3---sn-abc.googlevideo.com",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "instagram.com",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "t.me",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "chatgpt.com",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "claude.ai",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "github.com",
+   "expect": "proxy",
+   "why": "FINAL,PROXY"
+  },
+  {
+   "dest": "seasonvar.ru",
+   "expect": "proxy",
+   "why": ".ru hosted abroad -> FINAL,PROXY (as in SR)"
+  },
+  {
+   "dest": "tvrain.ru",
+   "expect": "proxy",
+   "why": ".ru hosted abroad -> FINAL,PROXY (as in SR)"
+  },
+  {
+   "dest": "149.154.167.50",
+   "expect": "proxy",
+   "why": "Telegram DC by bare IP"
+  },
+  {
+   "dest": "77.88.55.242",
+   "expect": "direct",
+   "why": "bare Russian IP -> geoip:ru"
+  },
+  {
+   "dest": "8.8.8.8",
+   "expect": "proxy",
+   "why": "bare foreign IP -> FINAL,PROXY"
+  },
+  {
+   "dest": "192.168.88.1",
+   "expect": "direct",
+   "why": "home LAN"
+  }
+ ]
+}

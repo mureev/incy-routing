@@ -1,0 +1,15 @@
+# The image COPYs incy_routing/ only; the rest would just be build context uploaded on every build.
+.git
+.github
+.cache
+.venv
+venv
+tests
+tools
+data
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+*.md
+.DS_Store

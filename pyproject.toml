@@ -1,0 +1,34 @@
+[project]
+name = "incy-routing"
+version = "1.0.0"
+description = "Shadowrocket split-routing configs, rebuilt daily as INCY routing profiles and served for autorouting"
+requires-python = ">=3.12"
+dependencies = []  # standard library only; requirements-dev.txt has the test tools
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+  "E501",    # long lines: some tables and URLs read better whole
+  "RUF001",  # ambiguous unicode: this project is *about* Cyrillic names
+  "RUF002",
+  "RUF003",
+  "SIM108",  # a ternary is not always clearer than an if
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["incy_routing"]
+known-local-folder = ["conftest", "geodata"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+filterwarnings = [
+  "error::DeprecationWarning",
+  "error::PendingDeprecationWarning",
+]
+xfail_strict = true

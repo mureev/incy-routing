@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Upstream snapshots: byte-for-byte what the lists' authors publish, never normalised.
+tests/fixtures/** -text

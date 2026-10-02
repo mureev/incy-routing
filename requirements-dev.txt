@@ -1,0 +1,8 @@
+# The suite and the lint -- never the image, which needs nothing beyond the standard library.
+#
+# Exact pins, because a test tool that floats turns master red on its own release day, and a red master is a
+# deploy that does not happen. Locked with hashes, everything they pull in included, as requirements-dev.lock,
+# which `make lock` writes and CI installs: the jobs that run these decide whether `release` publishes.
+# The same versions as mureev/weather on purpose.
+pytest==9.1.1        # the suite
+ruff==0.16.10        # lint, the first step of the gate

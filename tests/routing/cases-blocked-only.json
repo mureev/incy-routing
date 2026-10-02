@@ -1,0 +1,27 @@
+{
+  "hosts": {},
+  "cases": [
+    {"dest": "youtube.com", "expect": "proxy", "why": "community list"},
+    {"dest": "rr3---sn-abc.googlevideo.com", "expect": "proxy", "why": "community list"},
+    {"dest": "instagram.com", "expect": "proxy", "why": "DOMAIN-KEYWORD,instagram"},
+    {"dest": "scontent.cdninstagram.com", "expect": "proxy", "why": "keyword instagram"},
+    {"dest": "facebook.com", "expect": "proxy", "why": "keyword facebook"},
+    {"dest": "x.com", "expect": "proxy", "why": "community list"},
+    {"dest": "discord.com", "expect": "proxy", "why": "keyword discord / Discord.list"},
+    {"dest": "t.me", "expect": "proxy", "why": "Telegram.list"},
+    {"dest": "web.whatsapp.com", "expect": "proxy", "why": "keyword whatsapp"},
+    {"dest": "chatgpt.com", "expect": "proxy", "why": "keyword chatgpt"},
+    {"dest": "claude.ai", "expect": "proxy", "why": "community list"},
+    {"dest": "www.notion.so", "expect": "proxy", "why": "keyword notion"},
+    {"dest": "4pda.to", "expect": "proxy", "why": "keyword 4pda"},
+    {"dest": "gosuslugi.ru", "expect": "direct", "why": "FINAL,DIRECT"},
+    {"dest": "online.sberbank.ru", "expect": "direct", "why": "FINAL,DIRECT"},
+    {"dest": "vk.com", "expect": "direct", "why": "FINAL,DIRECT"},
+    {"dest": "github.com", "expect": "direct", "why": "not in any list"},
+    {"dest": "apple.com", "expect": "direct", "why": "not in any list"},
+    {"dest": "149.154.167.50", "expect": "proxy", "why": "telegram_ips.list"},
+    {"dest": "157.240.1.35", "expect": "proxy", "why": "meta_ips.list"},
+    {"dest": "8.8.8.8", "expect": "direct", "why": "FINAL,DIRECT"},
+    {"dest": "77.88.55.242", "expect": "direct", "why": "FINAL,DIRECT"}
+  ]
+}

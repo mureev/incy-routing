@@ -107,3 +107,17 @@ downloads from the profile's `Geositeurl`.
 
 **Why.** An upstream outage is not something a restart fixes, and the last good profiles keep being served
 meanwhile. A health check that failed on staleness would roll back good deploys during an outage.
+
+## 10. Remote DNS is Quad9, not Cloudflare
+
+**Decision.** Every profile's remote resolver is Quad9 over DoH (`dns.quad9.net`, 9.9.9.9), pinned in `DnsHosts`.
+
+**Why.** Cloudflare can't reach some Russian zones' name servers. In November 2026 both 1.1.1.1 and 1.1.1.2
+answered SERVFAIL for `lkfl2.nalog.ru` (the tax service's login: a CNAME into `gi.nalog.ru`), with "EDE(22): No
+Reachable Authority at delegation gi.nalog.ru". Yandex, Google and Quad9 resolved it. INCY on macOS evidently
+asked the remote resolver for that name even though `geosite:category-ru` sends it direct (inferred: its logs
+aren't readable), so the page failed while the rest of `nalog.ru` worked. Quad9 also filters malware
+domains, which is why 1.1.1.2 had been chosen over 1.1.1.1.
+
+**What would change it.** Quad9 failing a Russian zone the same way. Check one with a DoH query through the
+tunnel before switching resolvers again.

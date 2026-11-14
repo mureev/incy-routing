@@ -342,13 +342,14 @@ def build_profile(prof: Profile, name: str, *, final: str | None = None, route_o
         # AsIs is its no-resolve.
         "DomainStrategy": domain_strategy or ("IPIfNonMatch" if prof.resolves_for_ip_rules else "AsIs"),
         "FakeDNS": "false",
+        # Quad9, not Cloudflare: Cloudflare can't reach some Russian zones' name servers (DECISIONS.md §10).
         "RemoteDNSType": "DoH",
-        "RemoteDNSDomain": "https://security.cloudflare-dns.com/dns-query",
-        "RemoteDNSIP": "1.1.1.2",
+        "RemoteDNSDomain": "https://dns.quad9.net/dns-query",
+        "RemoteDNSIP": "9.9.9.9",
         "DomesticDNSType": "DoH",
         "DomesticDNSDomain": "https://77.88.8.8/dns-query",
         "DomesticDNSIP": "77.88.8.8",
-        "DnsHosts": {"security.cloudflare-dns.com": "1.1.1.2"},
+        "DnsHosts": {"dns.quad9.net": "9.9.9.9"},
         "Geoipurl": geoip_url,
         "Geositeurl": geosite_url,
         "useChunkFiles": True,

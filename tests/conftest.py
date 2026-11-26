@@ -36,3 +36,13 @@ def data_dir(tmp_path: Path) -> Path:
     data = tmp_path / "data"
     geodata.write(data / "geo")
     return data
+
+
+@pytest.fixture
+def rule_validator(monkeypatch):
+    """The unit suite has no executable dependency. The routing and image gates use real Xray."""
+    from incy_routing import build
+
+    checked = []
+    monkeypatch.setattr(build, "validate_profile", lambda profile, geo: checked.append(profile))
+    return checked

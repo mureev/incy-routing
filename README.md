@@ -66,6 +66,7 @@ Anything else is 404; nothing is listed.
 | `INCY_PORT` | `8080` | |
 | `INCY_SOURCE` | misha's repo | where the configs and lists come from |
 | `INCY_MIRROR` | — | read upstream from `<dir>/<host>/<path>`, offline (tests) |
+| `INCY_XRAY` | `xray` | Xray executable. The image includes the checksum-pinned version used by the routing suite. |
 | `INCY_GEO_REFRESH` | `1` | `0`: never download geo files; they must already be in `<data>/geo` |
 
 ## How a build works
@@ -79,7 +80,9 @@ Anything else is 404; nothing is listed.
 4. **Publish all or nothing.**
    - Any list or include that fails to load stops the run.
    - So does a profile that falls below its sanity gate (`incy_routing/profiles.py`).
-   - Otherwise changed files are swapped in by atomic rename.
+   - The pinned Xray executable must load each generated profile. Downloaded geodata is staged and checked
+     before it can replace the cache.
+   - The server switches to a complete generation in one atomic rename.
    - When a run is stopped, phones keep the last good profile.
 5. **Keep `LastUpdated` unless the rules change.** A newer `LastUpdated` makes INCY re-download about 27 MB of
    geo files.
@@ -94,7 +97,7 @@ Not expressible in an INCY profile, and reported in the build log:
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install --require-hashes --no-deps -r requirements-dev.lock
-make check      # 55 tests; the upstream lists are a committed snapshot, the geo files synthetic
+make check      # the upstream lists are a committed snapshot, the geo files synthetic
 make routing    # real Xray v26.9.9 + pinned geo release, checked by SHA-256
 make canary     # the same against today's lists and geo data (CI runs it Mondays)
 ```

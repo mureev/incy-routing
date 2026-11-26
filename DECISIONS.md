@@ -95,7 +95,7 @@ skip check wants.
 
 ## 8. Standard library only, Loyalsoldier for validation only
 
-**Decision.** No runtime dependencies. The stdlib IDNA 2003 codec is enough for the Cyrillic names in the lists
+**Decision.** The Python package uses the standard library. The stdlib IDNA 2003 codec is enough for the Cyrillic names in the lists
 (checked against IDNA 2008 on every entry). The geo files only validate and prune; phones use whatever INCY
 downloads from the profile's `Geositeurl`.
 
@@ -107,3 +107,17 @@ downloads from the profile's `Geositeurl`.
 
 **Why.** An upstream outage is not something a restart fixes, and the last good profiles keep being served
 meanwhile. A health check that failed on staleness would roll back good deploys during an outage.
+
+
+## 10. Validate and publish complete generations
+
+**Decision.** The service image includes the same checksum-pinned Xray executable as the routing suite.
+Each generated profile must pass `xray run -test` with the geodata used to build it. The compiler uses
+blackhole outbounds, so validating rules opens no connections. A downloaded geo file is checked before the
+build uses it. Cache replacement also waits for all profiles to pass.
+
+**Why.** Rule counts, required entries and protobuf tag names cannot detect every configuration Xray
+rejects. The last good profiles remain available during a failed build. A single symlink rename makes the
+entire tested generation visible, and the read lock keeps /status and HTTP metadata coherent. An upgraded
+service serves the existing profiles while the first validated generation builds. The original public
+directory remains available if the deployment rolls back to an older image.

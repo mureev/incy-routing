@@ -16,7 +16,7 @@ from conftest import SOURCE
 
 
 @pytest.fixture
-def service(data_dir, mirror):
+def service(data_dir, mirror, rule_validator):
     build.run(data_dir, source=SOURCE, mirror=mirror, geo_refresh=False, log=lambda m: None)
     return Service(data_dir, source=SOURCE, mirror=mirror, geo_refresh=False)
 

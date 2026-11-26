@@ -34,7 +34,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import build
+from . import build, publication
 from .profiles import PROFILES
 
 RETRIES = 5  # after a failed scheduled build, try again hourly this many times, then wait for the next day
@@ -49,7 +49,7 @@ class Service:
     def __init__(self, data_dir: Path, *, build_at: str = "01:45", jitter_min: int = 15, stale_hours: float = 50,
                  source: str = build.SOURCE, mirror: Path | None = None, geo_refresh: bool = True):
         self.data_dir = data_dir
-        self.public = data_dir / "public"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.hour, self.minute = (int(x) for x in build_at.split(":"))
         self.jitter_min = jitter_min
         self.stale_hours = stale_hours
@@ -66,6 +66,11 @@ class Service:
                              geo_refresh=self.geo_refresh, log=log)
 
     def status(self) -> dict:
+        with publication.locked(self.data_dir, shared=True):
+            return self._status()
+
+    def _status(self) -> dict:
+        public = publication.published_dir(self.data_dir)
         try:
             status = json.loads((self.data_dir / "status.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -76,7 +81,7 @@ class Service:
             age = (datetime.now(UTC) - datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds()
         profiles = {}
         for slug in sorted(self.slugs):
-            path = self.public / f"{slug}.json"
+            path = public / f"{slug}.json"
             if path.exists():
                 body = path.read_bytes()
                 data = json.loads(body)
@@ -93,7 +98,10 @@ class Service:
         }
 
     def needs_build_on_start(self) -> bool:
-        if any(not (self.public / f"{slug}.json").exists() for slug in self.slugs):
+        public = publication.published_dir(self.data_dir)
+        if not (self.data_dir / "current").is_symlink() or any(
+            not (public / f"{slug}.json").exists() for slug in self.slugs
+        ):
             return True
         last = self.status()["last_success"]
         if not last:
@@ -159,10 +167,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, body, {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store"})
         m = SLUG.match(path)
         if m and m.group(1) in self.service.slugs:
-            file = self.service.public / f"{m.group(1)}.json"
+            data_dir = self.service.data_dir
             try:
-                body = file.read_bytes()
-                mtime = file.stat().st_mtime
+                with publication.locked(data_dir, shared=True):
+                    path = publication.published_dir(data_dir) / f"{m.group(1)}.json"
+                    with path.open("rb") as file:
+                        body = file.read()
+                        mtime = os.fstat(file.fileno()).st_mtime
             except OSError:
                 return self._send(503, b"not built yet\n", {"Content-Type": "text/plain; charset=utf-8", "Retry-After": "120"})
             etag = '"' + hashlib.sha256(body).hexdigest()[:32] + '"'

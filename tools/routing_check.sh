@@ -45,10 +45,24 @@ else
 fi
 cp "$DATA/geo/geosite.dat" "$DATA/geo/geoip.dat" "$XRAY_DIR/"
 
-python3 -m incy_routing.build --data-dir "$DATA" --no-geo-refresh "$@"
+INCY_XRAY="$XRAY_DIR/xray" python3 -m incy_routing.build --data-dir "$DATA" --no-geo-refresh "$@"
 fail=0
 for slug in ru-direct blocked-only sr-geo-literal; do
   echo "== $slug"
-  python3 tools/xray_check.py "$DATA/public/$slug.json" "tests/routing/cases-$slug.json" --xray "$XRAY_DIR" || fail=1
+  python3 tools/xray_check.py "$DATA/current/$slug.json" "tests/routing/cases-$slug.json" --xray "$XRAY_DIR" || fail=1
 done
+if [ "${LIVE:-0}" != 1 ] && [ "$fail" = 0 ]; then
+  before=$(readlink "$DATA/current")
+  cp -R tests/fixtures/upstream "$DATA/bad-mirror"
+  rules=$DATA/bad-mirror/raw.githubusercontent.com/misha-tgshv/shadowrocket-configuration-file/main/rules/domains_community.list
+  printf '\nDOMAIN-REGEX,[\n' >>"$rules"
+  if INCY_XRAY="$XRAY_DIR/xray" python3 -m incy_routing.build --data-dir "$DATA" --no-geo-refresh \
+      --mirror "$DATA/bad-mirror" >"$DATA/rejection.log"; then
+    echo "The build published a malformed regular expression" >&2
+    exit 1
+  fi
+  grep -q 'Xray validation failed' "$DATA/rejection.log"
+  [ "$(readlink "$DATA/current")" = "$before" ]
+  echo "Malformed upstream rule rejected by Xray; the published generation is unchanged."
+fi
 exit $fail

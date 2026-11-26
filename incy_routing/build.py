@@ -1,13 +1,4 @@
-"""Build every profile in profiles.py and publish the ones that changed, all or nothing.
-
-    <data>/geo/      geosite.dat, geoip.dat: Loyalsoldier's, the files INCY bundles; used only to validate
-                     tags and prune. Refreshed weekly; a failed download keeps the old copy.
-    <data>/stage/    this run's output, seeded with what is live so unchanged rules keep their LastUpdated
-    <data>/public/   what is served; files are swapped in one atomic rename each, and only when they changed
-    <data>/status.json   the last attempt and the last success, for /status
-
-A run publishes nothing unless every profile built with --strict (every list and include loaded) and passed
-its `expect` gate. Phones then simply keep the last good profile.
+"""Validate profiles and geodata, then atomically publish a complete generation.
 
     python -m incy_routing.build --data-dir ./data [--mirror DIR] [--no-geo-refresh]
 """
@@ -19,15 +10,20 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from contextlib import redirect_stderr
 from datetime import UTC, datetime
+from http.client import HTTPException
 from pathlib import Path
 
-from . import convert
+from . import convert, publication
+from .geo import GeoFile
 from .profiles import PROFILES, SOURCE
+from .xray import validate_profile
 
 GEO_BASE = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download"
 GEO_MAX_AGE = 7 * 86400
@@ -37,24 +33,36 @@ def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def refresh_geo(geo_dir: Path, log) -> None:
-    geo_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("geosite.dat", "geoip.dat"):
-        path = geo_dir / name
-        if path.exists() and path.stat().st_size and time.time() - path.stat().st_mtime < GEO_MAX_AGE:
-            continue
-        tmp = path.with_suffix(".new")
-        try:
-            req = urllib.request.Request(f"{GEO_BASE}/{name}", headers={"User-Agent": "incy-routing"})
-            with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as fh:
-                shutil.copyfileobj(r, fh)
-            os.replace(tmp, path)
-            log(f"geo: downloaded {name} ({path.stat().st_size} bytes)")
-        except Exception as exc:
-            tmp.unlink(missing_ok=True)
-            if not path.exists():
-                raise RuntimeError(f"cannot download {name}: {exc}") from exc
-            log(f"geo: kept the old {name} ({exc})")
+def stage_geo(cache: Path, stage: Path, refresh: bool, log) -> list[str]:
+    """Prepare geodata without replacing any cached file until the whole build passes."""
+    stage.mkdir()
+    downloaded = []
+    for name, rule in (("geosite.dat", {"DirectSites": ["geosite:private"]}),
+                       ("geoip.dat", {"DirectIp": ["geoip:private"]})):
+        path, candidate = cache / name, stage / name
+        if refresh and (not path.is_file() or not path.stat().st_size or
+                        time.time() - path.stat().st_mtime >= GEO_MAX_AGE):
+            try:
+                req = urllib.request.Request(f"{GEO_BASE}/{name}", headers={"User-Agent": "incy-routing"})
+                with urllib.request.urlopen(req, timeout=300) as response, candidate.open("wb") as file:
+                    shutil.copyfileobj(response, file)
+                data = GeoFile(candidate)
+                try:
+                    if "private" not in data:
+                        raise ValueError("missing private tag")
+                finally:
+                    data.close()
+                validate_profile(rule, stage)
+                downloaded.append(name)
+                log(f"geo: validated {name} ({candidate.stat().st_size} bytes)")
+                continue
+            except (OSError, HTTPException, ValueError, subprocess.TimeoutExpired) as exc:
+                candidate.unlink(missing_ok=True)
+                if not path.is_file():
+                    raise RuntimeError(f"cannot validate downloaded {name}: {exc}") from exc
+                log(f"geo: kept the old {name} ({exc})")
+        candidate.symlink_to(path.resolve())
+    return downloaded
 
 
 def check(slug: str, profile: dict, expect: dict, name: str) -> list[str]:
@@ -74,26 +82,31 @@ def check(slug: str, profile: dict, expect: dict, name: str) -> list[str]:
 def run(data_dir: Path, *, source: str = SOURCE, mirror: Path | None = None, geo_refresh: bool = True,
         profiles: list[dict] | None = None, log=print) -> dict:
     """One build. Returns the status written to <data>/status.json."""
-    profiles = PROFILES if profiles is None else profiles
-    public, stage, geo = data_dir / "public", data_dir / "stage", data_dir / "geo"
-    for d in (public, stage, geo):
-        d.mkdir(parents=True, exist_ok=True)
+    data_dir = data_dir.resolve()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    with publication.locked(data_dir, "build"):
+        return _run(data_dir, source, mirror, geo_refresh, PROFILES if profiles is None else profiles, log)
+
+
+def _run(data_dir: Path, source: str, mirror: Path | None, geo_refresh: bool, profiles: list[dict], log) -> dict:
+    public = publication.published_dir(data_dir)
+    cache = data_dir / "geo"
+    generations = data_dir / "generations"
+    for directory in (cache, generations):
+        directory.mkdir(exist_ok=True)
     status_path = data_dir / "status.json"
     try:
         status = json.loads(status_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         status = {}
     status["last_attempt"] = _now()
-
+    stage = Path(tempfile.mkdtemp(prefix="build-", dir=generations))
+    switched = False
     try:
-        if geo_refresh:
-            refresh_geo(geo, log)
-        for p in profiles:
-            for f in stage.glob(f"{p['slug']}.*"):
-                f.unlink()
-            live = public / f"{p['slug']}.json"
-            if live.exists():
-                shutil.copy2(live, stage / live.name)
+        geo = stage / "geo"
+        downloaded = stage_geo(cache, geo, geo_refresh, log)
+        for live in public.glob("*.json"):
+            shutil.copy2(live, stage / live.name)
         problems: list[str] = []
         for p in profiles:
             argv = [p["conf"].format(source=source), "--name", p["name"], "--slug", p["slug"],
@@ -111,30 +124,54 @@ def run(data_dir: Path, *, source: str = SOURCE, mirror: Path | None = None, geo
                 problems.append(f"{p['slug']}: the converter exited {code}")
                 continue
             built = json.loads((stage / f"{p['slug']}.json").read_text(encoding="utf-8"))
-            problems += check(p["slug"], built, p["expect"], p["name"])
+            issues = check(p["slug"], built, p["expect"], p["name"])
+            if not issues:
+                try:
+                    validate_profile(built, geo)
+                except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+                    issues.append(f"{p['slug']}: Xray validation failed: {exc}")
+            problems += issues
         if problems:
             raise RuntimeError("; ".join(problems))
 
         results = {}
         for p in profiles:
-            src, dst = stage / f"{p['slug']}.json", public / f"{p['slug']}.json"
+            name = f"{p['slug']}.json"
+            src, dst = stage / name, public / name
             if dst.exists() and dst.read_bytes() == src.read_bytes():
+                shutil.copystat(dst, src)
                 results[p["slug"]] = "unchanged"
-                continue
-            tmp = public / f".{p['slug']}.json.tmp"
-            shutil.copyfile(src, tmp)
-            os.chmod(tmp, 0o644)
-            os.replace(tmp, dst)
-            results[p["slug"]] = "updated"
-        status.update(last_success=status["last_attempt"], results=results, error=None)
+            else:
+                results[p["slug"]] = "updated"
+        for name in downloaded:
+            os.replace(geo / name, cache / name)
+        shutil.rmtree(geo)
+        for path in stage.iterdir():
+            if path.suffix != ".json":
+                path.unlink()
+
+        with publication.locked(data_dir):
+            if not (data_dir / "current").is_symlink() or "updated" in results.values():
+                publication.publish(data_dir, stage)
+                switched = True
+            status.update(last_success=status["last_attempt"], results=results, error=None)
+            _write_status(status_path, status)
         log("published: " + " ".join(f"{k}={v}" for k, v in results.items()))
     except Exception as exc:
         status["error"] = str(exc)
-        log(f"FAILED, nothing published: {exc}")
-    tmp = data_dir / ".status.json.tmp"
-    tmp.write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, status_path)
+        log(f"{'profiles published, status update failed' if switched else 'FAILED, nothing published'}: {exc}")
+        with publication.locked(data_dir):
+            _write_status(status_path, status)
+    finally:
+        if not switched:
+            shutil.rmtree(stage, ignore_errors=True)
     return status
+
+
+def _write_status(path: Path, status: dict) -> None:
+    tmp = path.with_name(".status.json.tmp")
+    tmp.write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def main(argv: list[str] | None = None) -> int:

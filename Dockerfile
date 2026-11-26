@@ -1,8 +1,33 @@
 # syntax=docker/dockerfile:1
 
-# One stage: the service is the standard library and nothing else, so there is nothing to build and no
-# builder worth keeping apart. If a dependency ever arrives, copy mureev/weather's two-stage venv layout.
+# Pin the same Xray release as tools/routing_check.sh. Copy only its executable.
+FROM --platform=$BUILDPLATFORM python:3.12-slim AS xray
+ARG TARGETARCH
+RUN python - "$TARGETARCH" <<'PYTHON'
+import hashlib
+import io
+import os
+import sys
+import urllib.request
+import zipfile
+
+asset, digest = {
+    "amd64": ("Xray-linux-64.zip", "1eb9175d0f0a8f8149c9230a7fc5ae66ce332ed20a53155ce61fe62e3f58b7df"),
+    "arm64": ("Xray-linux-arm64-v8a.zip", "3e38d72dfc5eb65c91df0e5583e9b6676c32232041da47de6ae73946b526d66c"),
+}[sys.argv[1]]
+with urllib.request.urlopen(f"https://github.com/XTLS/Xray-core/releases/download/v26.9.9/{asset}", timeout=120) as response:
+    archive = response.read()
+if hashlib.sha256(archive).hexdigest() != digest:
+    raise SystemExit("Xray archive checksum mismatch")
+with zipfile.ZipFile(io.BytesIO(archive)) as release:
+    release.extract("xray", "/")
+    release.extract("LICENSE", "/")
+os.chmod("/xray", 0o755)
+PYTHON
+
 FROM python:3.12-slim
+COPY --from=xray /xray /usr/local/bin/xray
+COPY --from=xray /LICENSE /usr/share/doc/xray/LICENSE
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

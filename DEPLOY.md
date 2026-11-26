@@ -32,7 +32,9 @@ Other branches and pull requests get the same jobs and publish nothing.
 ## Data
 
 `/data` is a volume, so `LastUpdated` survives a new image and phones don't re-download geo files after a deploy.
-Losing it costs one rebuild at start-up and one geo download per phone.
+Losing it costs one rebuild at start-up and one geo download per phone. The service reads a complete
+generation through `/data/current`. An upgrade serves the existing `/data/public` files while it builds its
+first validated generation, and keeps that directory available to an older image during rollback.
 
 ## Rolling back
 

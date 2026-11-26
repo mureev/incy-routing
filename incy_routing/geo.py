@@ -19,15 +19,17 @@ from pathlib import Path
 KINDS = {0: "keyword", 1: "regexp", 2: "domain", 3: "full"}
 
 
-def _varint(buf, i: int) -> tuple[int, int]:
-    shift = result = 0
-    while True:
+def _varint(buf, i: int, end: int) -> tuple[int, int]:
+    result = 0
+    for shift in range(0, 64, 7):
+        if i >= end:
+            break
         b = buf[i]
         i += 1
         result |= (b & 0x7F) << shift
         if not b & 0x80:
             return result, i
-        shift += 7
+    raise ValueError("truncated or oversized protobuf varint")
 
 
 def _fields(buf, start: int = 0, end: int | None = None) -> Iterator[tuple[int, int, object]]:
@@ -35,13 +37,17 @@ def _fields(buf, start: int = 0, end: int | None = None) -> Iterator[tuple[int, 
     i = start
     end = len(buf) if end is None else end
     while i < end:
-        key, i = _varint(buf, i)
+        key, i = _varint(buf, i, end)
         number, wire = key >> 3, key & 7
+        if number == 0:
+            raise ValueError("invalid protobuf field number")
         if wire == 0:
-            value, i = _varint(buf, i)
+            value, i = _varint(buf, i, end)
             yield number, wire, value
         elif wire == 2:
-            length, i = _varint(buf, i)
+            length, i = _varint(buf, i, end)
+            if length > end - i:
+                raise ValueError("truncated protobuf field")
             yield number, wire, (i, i + length)
             i += length
         elif wire == 1:
@@ -50,6 +56,8 @@ def _fields(buf, start: int = 0, end: int | None = None) -> Iterator[tuple[int, 
             i += 4
         else:
             raise ValueError(f"unsupported protobuf wire type {wire} at byte {i}")
+        if i > end:
+            raise ValueError("truncated protobuf field")
 
 
 class GeoFile:
@@ -60,13 +68,17 @@ class GeoFile:
             self._map = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
         self.buf = memoryview(self._map)
         self.index: dict[str, tuple[int, int]] = {}
-        for number, wire, span in _fields(self.buf):
-            if number != 1 or wire != 2:
-                continue
-            for n2, w2, v2 in _fields(self.buf, *span):
-                if n2 == 1 and w2 == 2:
-                    self.index[bytes(self.buf[v2[0]:v2[1]]).decode().lower()] = span
-                    break
+        try:
+            for number, wire, span in _fields(self.buf):
+                if number != 1 or wire != 2:
+                    continue
+                for n2, w2, v2 in _fields(self.buf, *span):
+                    if n2 == 1 and w2 == 2:
+                        self.index[bytes(self.buf[v2[0]:v2[1]]).decode().lower()] = span
+                        break
+        except ValueError:
+            self.close()
+            raise
 
     def __contains__(self, tag: str) -> bool:
         return tag.lower() in self.index
